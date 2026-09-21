@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Runoff</title>
+<link rel="icon" href="/*FAVICON*/">
+<script>
+/*VENDOR_GEOTIFF*/
+</script>
+<script>
+/*VENDOR_THREE*/
+</script>
+<style>
+/*FONTFACE*/
+:root{
+  --paper:#E6EBE3; --panel:#F2F4EF; --ink:#1B2524; --muted:#56655F; --rule:#BCC6B9;
+  --earth:#7A5230; --water:#1B67A6; --warn:#A63D2F; --well:#D3DBD0;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#131918; --panel:#1A2221; --ink:#DCE3DB; --muted:#95A49C; --rule:#34413D;
+    --earth:#C9965F; --water:#67AEEA; --warn:#E58471; --well:#0E1312;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#131918; --panel:#1A2221; --ink:#DCE3DB; --muted:#95A49C; --rule:#34413D;
+  --earth:#C9965F; --water:#67AEEA; --warn:#E58471; --well:#0E1312;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:15px/1.5 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;}
+header{display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;padding:1.1rem 1.25rem .6rem}
+h1{font-size:2rem;line-height:1;margin:0;letter-spacing:-.01em}
+.logo{display:inline-block;line-height:0}
+.logo svg{height:100%;width:auto;overflow:visible}
+h1 .logo{height:2.6rem}
+.logo.mini{height:1.5rem}
+.lg-letters{fill:#fff}
+.lg-line{fill:none;stroke:var(--ink);stroke-width:9;stroke-linejoin:round}
+.lg-water{fill:var(--water)}
+.lg-back{fill:var(--water);opacity:.45}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+header p{margin:0;color:var(--muted);max-width:60ch}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:1.25rem;padding:0 1.25rem 1.5rem}
+@media (max-width:860px){.layout{grid-template-columns:1fr}}
+.stage{min-width:0}
+.well{background:var(--well);border:1px solid var(--rule);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;min-height:320px;overflow:hidden;position:relative;touch-action:none}
+.well:has(canvas:not([hidden])){min-height:0}
+canvas{display:block}
+canvas.pix{image-rendering:pixelated}
+#empty{padding:2rem;text-align:center;color:var(--muted);max-width:40ch}
+.probe{font-variant-numeric:tabular-nums;color:var(--muted);min-height:1.5em;margin-top:.45rem;font-size:.9rem}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:1rem 1.1rem;align-self:start}
+.panel h2{font-size:1rem;margin:0 0 .5rem}
+.panel section+section{border-top:1px solid var(--rule);margin-top:1rem;padding-top:1rem}
+.note{color:var(--muted);font-size:.87rem;margin:.5rem 0 0}
+.err{color:var(--warn)}
+button,.filebtn{font:inherit;color:var(--ink);background:transparent;border:1.5px solid var(--ink);
+  border-radius:6px;padding:.4rem .8rem;cursor:pointer}
+button.primary{background:var(--ink);color:var(--paper)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,.filebtn:focus-within,select:focus-visible,input:focus-visible{outline:2px solid var(--water);outline-offset:2px}
+.filebtn input{position:absolute;opacity:0;width:1px;height:1px}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.row+.row{margin-top:.6rem}
+label.field{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.2rem .6rem;margin-top:.6rem}
+label.field input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--water)}
+label.field output{font-variant-numeric:tabular-nums;color:var(--muted)}
+select,input[type=number]{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:.25rem .4rem}
+input[type=number]{width:5.5rem}
+label.field select{max-width:13rem}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);border:1.5px solid var(--ink);border-radius:6px;overflow:hidden}
+.tools label{text-align:center;padding:.35rem .2rem;cursor:pointer;font-size:.92rem}
+.tools label+label{border-left:1.5px solid var(--ink)}
+.tools input{position:absolute;opacity:0}
+.tools label:has(input:checked){background:var(--ink);color:var(--paper)}
+.tools label:has(input:focus-visible){outline:2px solid var(--water);outline-offset:-4px}
+.toolopts{margin-top:.5rem}
+.clock{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.rate{color:var(--muted);font-size:.87rem}
+dl.balance{display:grid;grid-template-columns:1fr auto;gap:.15rem .8rem;margin:.2rem 0 0;font-variant-numeric:tabular-nums}
+dl.balance dt{color:var(--muted)}
+dl.balance dd{margin:0;text-align:right}
+dl.balance .sum{border-top:1px solid var(--rule);padding-top:.2rem}
+details{margin-top:.2rem}
+summary{cursor:pointer;font-weight:700}
+details p{margin:.5rem 0 0;font-size:.9rem;max-width:62ch}
+[hidden]{display:none!important}
+.viewbar{display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem;flex-wrap:wrap}
+.seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:.3rem .9rem}
+.seg button+button{border-left:1.5px solid var(--ink)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.viewbar label{display:flex;gap:.4rem;align-items:center;color:var(--muted);font-size:.9rem}
+.viewbar input[type=range]{width:7rem;accent-color:var(--water)}
+#gl{display:block;touch-action:none}
+.hint{color:var(--muted);font-size:.85rem}
+.tools{grid-template-columns:repeat(4,1fr)}
+.tools label{border-top:1.5px solid var(--ink)}
+.tools label:nth-child(-n+4){border-top:0}
+.tools label+label{border-left:0}
+.tools label:not(:nth-child(4n+1)){border-left:1.5px solid var(--ink)}
+.tools>button{border:0;border-top:1.5px solid var(--ink);border-left:1.5px solid var(--ink);border-radius:0;padding:.35rem .2rem;font-size:.92rem}
+button.busy{opacity:.75;cursor:progress}
+button.busy::after{content:'';display:inline-block;width:1.2em;text-align:left;animation:dots 1.2s steps(4,end) infinite}
+@keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+.attrib{position:absolute;right:0;bottom:0;background:color-mix(in srgb,var(--panel) 82%,transparent);color:var(--muted);font-size:.72rem;padding:.1rem .45rem;border-top-left-radius:5px;pointer-events:none;max-width:100%}
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.plabel{position:absolute;transform:translate(-50%,-50%);background:var(--panel);color:var(--ink);border:1.5px solid var(--water);
+  border-radius:999px;font-size:.75rem;line-height:1.3;padding:0 .4rem;font-weight:700;font-variant-numeric:tabular-nums}
+ul.scen{list-style:none;margin:.6rem 0 0;padding:0}
+ul.scen li{display:flex;gap:.4rem;align-items:center;padding:.3rem 0;border-top:1px solid var(--rule)}
+ul.scen li span{flex:1;min-width:0}
+ul.scen li small{color:var(--muted);display:block}
+ul.scen button{padding:.2rem .55rem;font-size:.88rem}
+ol.ponds{margin:.6rem 0 0;padding-left:1.4rem;font-variant-numeric:tabular-nums;font-size:.92rem}
+ol.ponds li{margin:.15rem 0}
+ol.ponds li span{color:var(--muted)}
+.toolgroups{display:grid;gap:.4rem}
+.tg{display:grid;grid-template-columns:4.9rem 1fr;align-items:center;gap:.4rem}
+.tgl{color:var(--muted);font-size:.84rem}
+.seg2{display:flex;border:1.5px solid var(--ink);border-radius:6px;overflow:hidden}
+.seg2 label{flex:1;text-align:center;padding:.32rem .1rem;cursor:pointer;font-size:.86rem;position:relative;min-width:0}
+.seg2 label+label{border-left:1.5px solid var(--ink)}
+.seg2 input{position:absolute;opacity:0;pointer-events:none}
+.seg2 label:has(input:checked){background:var(--ink);color:var(--paper)}
+.seg2 label:has(input:focus-visible){outline:2px solid var(--water);outline-offset:-4px}
+section.fold > *:not(.keep){display:none}
+h2.foldable{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin-bottom:.5rem}
+h2.foldable .caret{color:var(--muted);font-size:.8rem;transition:transform .15s}
+section.fold h2.foldable .caret{transform:rotate(-90deg)}
+section.fold .row.keep{margin-top:.5rem}
+.viewbar.selectmode .simonly{display:none!important}
+h3.sub{font-size:.92rem;margin:1rem 0 .3rem}
+.featlist{display:grid;gap:0}
+.feat{display:grid;grid-template-columns:4.4rem auto 1fr auto;gap:.2rem .45rem;align-items:center;padding:.35rem 0;border-top:1px solid var(--rule);font-size:.9rem}
+.feat .ft{font-weight:700}
+.feat .fi{color:var(--muted);font-size:.84rem;grid-column:1/-1;order:5}
+.feat input{width:4.6rem}
+.feat .unit{color:var(--muted);font-size:.84rem}
+.feat button{padding:.1rem .5rem;font-size:.85rem}
+.feat .ft:has(.sw){grid-column:1/3}
+.feat .sw{width:.9rem;height:.9rem;border-radius:3px;display:inline-block;vertical-align:-2px;margin-right:.35rem;border:1px solid var(--rule)}
+.empty{color:var(--muted);font-size:.87rem;padding:.3rem 0}
+button.small{padding:.2rem .6rem;font-size:.88rem}
+#view{position:absolute}
+.well{touch-action:none}
+.fsbar{display:none}
+.maxi .stage,.stage:fullscreen{position:fixed;inset:0;z-index:50;background:var(--paper);padding:max(.6rem,env(safe-area-inset-top,0px)) .8rem .6rem;display:flex;flex-direction:column}
+.stage:fullscreen .well,.maxi .stage .well{flex:1}
+.stage:fullscreen .fsbar,.maxi .stage .fsbar{display:flex;gap:.8rem;align-items:center;margin-top:.5rem}
+.fsbar .clock{font-size:1.2rem}
+.stage:fullscreen .probe,.maxi .stage .probe{margin-top:.3rem}
+.features{margin:.5rem 0 0;font-size:.9rem;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="logo" id="logoHead"></span><span class="sr">Runoff</span></h1>
+  <p>Load a lidar terrain model, pick an area, then rain on it, pour water on it, or add a spring.</p>
+</header>
+<main class="layout">
+  <div class="stage" id="stage">
+    <div class="viewbar" id="viewbar" hidden>
+      <div class="seg simonly" role="group" aria-label="View">
+        <button id="v2d" aria-pressed="true">Map</button>
+        <button id="v3d" aria-pressed="false">3D</button>
+      </div>
+      <label id="exagWrap" hidden>Height ×<output id="exagOut">2</output><input type="range" id="exag" min="1" max="6" step="0.5" value="2"></label>
+      <label class="simonly"><input type="checkbox" id="contours"> Contours <select id="cint"></select></label>
+      <label class="simonly"><input type="checkbox" id="pLabel" checked> Pond numbers</label>
+      <label>Map <output id="mapMixOut">0%</output><input type="range" id="mapMix" min="0" max="100" step="5" value="0" style="width:5.5rem"></label>
+      <label>Shading <select id="shading">
+        <option value="earth" selected>Earth</option><option value="meadow">Meadow</option><option value="slate">Slate</option>
+        <option value="grey">Greyscale</option><option value="rainbow">Rainbow height</option><option value="soil">Soil type</option></select></label>
+      <button id="fit" class="small">Fit</button>
+      <button id="fs" class="small simonly">Full screen</button>
+      <label class="simonly">Show <select id="showDepth"><option value="now">Water now</option><option value="peak">Deepest so far</option></select></label>
+      <span class="hint" id="hint3d" hidden>Drag to turn, right-drag or two fingers to slide, scroll or pinch to zoom.</span>
+    </div>
+    <div class="well" id="well">
+      <canvas id="view" aria-label="Terrain map" hidden></canvas>
+      <canvas id="gl" aria-label="3D terrain view" hidden></canvas>
+      <div class="labels" id="labels"></div>
+      <div class="attrib" id="attrib" hidden></div>
+      <div id="empty"><p>Open a DTM tile, find an area, or try the demo valley to start.</p></div>
+    </div>
+    <div class="probe" id="probe"></div>
+    <div class="fsbar" id="fsbar"><span class="logo mini" id="logoFs"></span><button class="primary" id="fsRun">Run</button><span class="clock" id="fsClock">0:00:00</span><span class="rate" id="fsRate"></span><button id="fsExit">Exit full screen</button></div>
+  </div>
+
+  <aside class="panel">
+    <section id="p-load">
+      <h2 class="keep">Region</h2>
+      <div class="row keep">
+        <label class="filebtn">Open DTM file<input type="file" id="file" accept=".asc,.tif,.tiff"></label>
+        <button id="demo">Use demo valley</button>
+      </div>
+      <p class="note">ASCII grid (.asc) or GeoTIFF (.tif) in metres. Unzip downloads first.</p>
+      <h3 class="sub">OS map backdrop (optional)</h3>
+      <div class="row" id="osKeyRow">
+        <input type="password" id="osKey" placeholder="Paste your OS Data Hub key" autocomplete="off" style="flex:1;min-width:7rem;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:.3rem .45rem">
+        <button id="osKeySave">Save key</button>
+      </div>
+      <div class="row" id="osKeySet" hidden><span class="note" id="osKeyState" style="margin:0;flex:1"></span><button id="osKeyEdit" class="small">Change</button></div>
+      <label class="field">Map style <select id="osStyle"><option value="Outdoor_27700" selected>Outdoor</option><option value="Light_27700">Light</option><option value="Road_27700">Road</option><option value="Leisure_27700">Leisure (Premium)</option></select></label>
+      <label class="field">My key includes Premium <input type="checkbox" id="osPremium"></label>
+      <p class="note">A free key (OS Maps API, OpenData plan) from osdatahub.os.uk. Save it before searching and the OS map shows on the overview too; fade it with the Map slider above the view. Contains OS data © Crown copyright and database rights.</p>
+      <h3 class="sub">Or find an area (England)</h3>
+      <label class="field">Area to preview <select id="eaSize"><option value="2000">2 km across</option><option value="4000" selected>4 km across</option><option value="6000">6 km across</option><option value="8000">8 km across</option></select></label>
+      <div class="row">
+        <input type="text" id="eaQ" placeholder="Postcode, place or grid ref" style="flex:1;min-width:7rem;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:.3rem .45rem">
+        <button id="eaGo">Find</button>
+      </div>
+      <div class="featlist" id="eaResults"></div>
+      <p class="note">Lidar straight from the Environment Agency. Pick a place, then drag a box on the overview and the detail downloads when you press Simulate.</p>
+      <p class="note" id="fileinfo" aria-live="polite"></p>
+    </section>
+
+    <section id="p-select" hidden>
+      <h2>Choose an area</h2>
+      <p class="note" style="margin-top:0">Drag a box on the map. Scroll or pinch to zoom; right-drag, shift-drag or two fingers to move around.</p>
+      <p id="selinfo" style="margin:.5rem 0 0"></p>
+      <label class="field">Cell size <select id="cellsize"></select></label>
+      <p class="note" id="cellnote"></p>
+      <div class="row" style="margin-top:.8rem"><button class="primary" id="go">Simulate this area</button><button id="backOv" hidden>Wider area</button></div>
+    </section>
+
+    <section id="p-sim" hidden>
+      <h2 class="keep">Run</h2>
+      <div class="row keep" style="justify-content:space-between;align-items:flex-end">
+        <div><div class="clock" id="clock">0:00:00</div><div class="rate" id="rate">Paused</div></div>
+        <button class="primary" id="run">Run</button>
+      </div>
+      <label class="field">Speed
+        <select id="speed">
+          <option value="1">Real time</option>
+          <option value="10">10× real time</option>
+          <option value="60">1 minute per second</option>
+          <option value="600">10 minutes per second</option>
+          <option value="0" selected>As fast as possible</option>
+        </select>
+      </label>
+      <label class="field">Engine
+        <select id="engine"><option value="gpu">Graphics card</option><option value="pool">Processor, all cores</option><option value="cpu">Processor, one core</option></select>
+      </label>
+      <p class="note" id="engineNote">Checking what this machine can do…</p>
+      <div class="row keep" style="margin-top:.7rem">
+        <button id="reset">Clear water</button>
+        <button id="back">Change area</button>
+      </div>
+    </section>
+
+    <section id="p-tools" hidden>
+      <h2 class="keep">Tools</h2>
+      <div class="toolgroups" role="radiogroup" aria-label="Map tool">
+        <div class="tg"><span class="tgl">Inspect</span><div class="seg2"><label><input type="radio" name="tool" value="look" checked>Look</label></div></div>
+        <div class="tg"><span class="tgl">Water</span><div class="seg2"><label><input type="radio" name="tool" value="pour">Pour</label><label><input type="radio" name="tool" value="source">Spring</label></div></div>
+        <div class="tg"><span class="tgl">Earthworks</span><div class="seg2"><label><input type="radio" name="tool" value="barrier">Barrier</label><label><input type="radio" name="tool" value="ditch">Ditch</label><label><input type="radio" name="tool" value="swale">Swale</label><label><input type="radio" name="tool" value="dig">Pond</label></div></div>
+        <div class="tg"><span class="tgl">Drainage</span><div class="seg2"><label><input type="radio" name="tool" value="culvert">Culvert</label></div></div>
+        <div class="tg" id="tgSoil" hidden><span class="tgl">Soil</span><div class="seg2"><label><input type="radio" name="tool" value="paint">Paint a soil zone</label></div></div>
+      </div>
+      
+      <div class="toolopts" id="opt-pour" hidden>
+        <label class="field">Depth poured (m) <input type="number" id="pourDepth" value="0.5" min="0.01" step="0.1"></label>
+        <label class="field">Brush radius (m) <input type="number" id="pourRadius" value="6" min="1" step="1"></label>
+      </div>
+      <div class="toolopts" id="opt-look"><p class="note">Hover to read ground height, water depth and speed.</p></div>
+      <div class="toolopts" id="opt-culvert" hidden>
+        <label class="field">Pipe diameter (m) <input type="number" id="culD" value="0.6" min="0.1" step="0.1"></label>
+        <p class="note">Drag from the inlet to the outlet, through the road or bank. Flow is driven by the water level difference and limited by the pipe size.</p>
+      </div>
+      <div class="toolopts" id="opt-barrier" hidden>
+        <label class="field">Top <select id="barMode"><option value="level" selected>Level crest</option><option value="follow">Follows ground</option></select></label>
+        <label class="field" id="barHLabel">Crest above lowest point (m) <input type="number" id="barH" value="1" min="0.05" step="0.1"></label>
+        <label class="field">Width (m) <input type="number" id="barW" value="3" min="0.5" step="0.5"></label>
+        <p class="note" id="barNote">Drag a line across the flow. A level crest ties into higher ground at each end, so run the line up the slope on both sides.</p>
+      </div>
+      <div class="toolopts" id="opt-ditch" hidden>
+        <label class="field">Depth (m) <input type="number" id="ditD" value="0.5" min="0.05" step="0.1"></label>
+        <p class="note">Drag a line to dig a channel one cell wide.</p>
+      </div>
+      <div class="toolopts" id="opt-swale" hidden>
+        <label class="field">Length (m) <input type="number" id="swL" value="60" min="5" step="5"></label>
+        <label class="field">Channel depth (m) <input type="number" id="swD" value="0.4" min="0.05" step="0.1"></label>
+        <label class="field">Channel width (m) <input type="number" id="swW" value="2" min="0.5" step="0.5"></label>
+        <label class="field">Berm height (m) <input type="number" id="swB" value="0.3" min="0" step="0.1"></label>
+        <p class="note">Press where the swale should start and drag the way it should run. It follows the contour at that height, with a level bottom and a berm on the downhill side.</p>
+      </div>
+      <div class="toolopts" id="opt-dig" hidden>
+        <label class="field">Bottom <select id="digMode"><option value="depth" selected>Depth below start</option><option value="level">Exact level</option></select></label>
+        <label class="field" id="digValLabel">Depth (m) <input type="number" id="digVal" value="1" min="0.05" step="0.1"></label>
+        <label class="field">Brush radius (m) <input type="number" id="digR" value="4" min="1" step="1"></label>
+        <p class="note">Paint the area to dig. Everything under the brush goes down to one flat bottom, but nothing already deeper gets filled. For tiers, start a new stroke inside the first pond.</p>
+      </div>
+      <div class="toolopts" id="opt-paint" hidden>
+        <label class="field">Soil <select id="zSoil"></select></label>
+        <label class="field">Land cover <select id="zCover"></select></label>
+        <label class="field">Brush radius (m) <input type="number" id="zR" value="10" min="1" step="1"></label>
+        <label class="field">Rub out instead <input type="checkbox" id="zErase"></label>
+        <p class="note">Paint where this soil and cover apply. Rubbing out returns cells to the settings used everywhere else.</p>
+      </div>
+      <h3 class="sub">On the map</h3>
+      <div class="featlist" id="featList"></div>
+      <div class="row" style="margin-top:.5rem"><button id="undo" disabled>Undo last earthwork</button></div>
+      <div class="toolopts" id="opt-source" hidden>
+        <label class="field">Spring flow (litres/s) <input type="number" id="srcFlow" value="50" min="1" step="10"></label>
+        <p class="note">For scale: a small field drain runs at a few litres per second, a brook in spate at a few hundred.</p>
+      </div>
+    </section>
+
+    <section id="p-env" hidden>
+      <h2 class="keep">Conditions</h2>
+      <label class="field keep">Rain <output id="rainOut">0 mm/hr</output><input type="range" id="rain" min="0" max="100" step="1" value="0"></label>
+      <label class="field keep">Stop rain after (minutes, 0 = keep going) <input type="number" id="rainDur" value="0" min="0" step="5"></label>
+      <label class="field">Soil
+        <select id="soil">
+          <option value="none">None (nothing soaks in)</option>
+          <option value="sand">Sand</option>
+          <option value="lsand">Loamy sand</option>
+          <option value="sloam">Sandy loam</option>
+          <option value="loam" selected>Loam</option>
+          <option value="siloam">Silt loam</option>
+          <option value="scloam">Sandy clay loam</option>
+          <option value="cloam">Clay loam</option>
+          <option value="sicloam">Silty clay loam</option>
+          <option value="sclay">Sandy clay</option>
+          <option value="siclay">Silty clay</option>
+          <option value="clay">Clay</option>
+          <option value="custom">Custom steady rate</option>
+        </select>
+      </label>
+      <label class="field" id="wetWrap">Soil starts
+        <select id="wet">
+          <option value="0.2">Dry</option>
+          <option value="0.5" selected>Moist</option>
+          <option value="0.8">Wet</option>
+          <option value="1">Saturated</option>
+        </select>
+      </label>
+      <label class="field" id="infWrap" hidden>Soaks in at <output id="infOut">0 mm/hr</output><input type="range" id="infil" min="0" max="50" step="1" value="5"></label>
+      <label class="field">Land cover
+        <select id="cover">
+          <option value="urban">Tarmac, roofs, tracks</option>
+          <option value="bare">Bare soil, crusted</option>
+          <option value="arable">Arable crops</option>
+          <option value="grazed" selected>Grazed pasture</option>
+          <option value="grass">Ungrazed grass, meadow</option>
+          <option value="rough">Rough grassland, bracken</option>
+          <option value="wood">Woodland</option>
+        </select>
+      </label>
+      <p class="note" id="soakNote"></p>
+      <label class="field">Different soils in places <input type="checkbox" id="zonesOn"></label>
+      <div id="zoneBox" hidden>
+        <div class="featlist" id="zoneList"></div>
+        <p class="note" id="zoneNote"></p>
+      </div>
+      <label class="field">Map edges
+        <select id="edges">
+          <option value="drain" selected>Let water leave</option>
+          <option value="wall">Hold water in</option>
+        </select>
+      </label>
+      <p class="note">Heavy rain in the UK is roughly 10–25 mm/hr; a severe summer storm can top 50 mm/hr for a short spell.</p>
+    </section>
+
+    <section id="p-balance" hidden>
+      <h2>Water balance</h2>
+      <dl class="balance">
+        <dt>Rain in</dt><dd id="b-rain">0</dd>
+        <dt>Poured in</dt><dd id="b-pour">0</dd>
+        <dt>From springs</dt><dd id="b-src">0</dd>
+        <dt>On the ground now</dt><dd id="b-store">0</dd>
+        <dt>Left the area</dt><dd id="b-out">0</dd>
+        <dt>Soaked in</dt><dd id="b-inf">0</dd>
+        <dt class="sum">Unaccounted</dt><dd class="sum" id="b-err">0</dd>
+      </dl>
+      <p class="note">Volumes in cubic metres. A bathtub holds about 0.15 m³.</p>
+    </section>
+
+    <section id="p-ponds" hidden>
+      <h2>Ponds</h2>
+      <label class="field">Slower than (m/s) <input type="number" id="pV" value="0.05" min="0.005" step="0.01"></label>
+      <label class="field">Deeper than (m) <input type="number" id="pD" value="0.05" min="0.01" step="0.01"></label>
+      <label class="field">At least (m³) <input type="number" id="pMin" value="5" min="0" step="5"></label>
+      <ol class="ponds" id="pondList"></ol>
+      <p class="note" id="pondNote">Connected water that’s both deep and slow enough, so pools behind dams count but the streams feeding them don’t. Updates every second while running.</p>
+    </section>
+
+    <section id="p-save" hidden>
+      <h2>Scenarios</h2>
+      <div class="row" id="saveRow"><input type="text" id="scName" placeholder="Name this setup" style="flex:1;min-width:8rem;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:.3rem .45rem"><button id="scSave">Save</button></div>
+      <ul class="scen" id="scList"></ul>
+      <div class="row" style="margin-top:.6rem">
+        <button id="scExport">Export file</button>
+        <label class="filebtn">Import file<input type="file" id="scImport" accept=".json"></label>
+      </div>
+      <p class="note" id="scNote" aria-live="polite"></p>
+    </section>
+
+    <section id="p-about">
+      <details>
+        <summary>How the water moves</summary>
+        <p>Each cell of the map holds a water depth. Every step, the flow across each cell edge speeds up or slows down according to the difference in water surface height either side, and is held back by ground roughness (Manning's n). This is the local inertial method used by the LISFLOOD-FP flood model (Bates et al. 2010, with de Almeida et al. 2012's smoothing). The step length shrinks automatically when water gets deep so it stays stable.</p>
+        <p>Checks it passes: a pool settles dead flat, water is conserved to rounding error, and rain on a uniform slope reaches the textbook Manning depth to within about 1.5%.</p>
+        <p>Soaking-in uses the Green-Ampt method with the Rawls, Brakensiek &amp; Miller (1983) soil parameters: dry soil takes water fast at first, slowing towards a steady rate as it wets. Land cover scales that rate and sets the roughness; those multipliers are rough guides, and woodland in particular varies a lot in the field.</p>
+        <p><strong>Not for flood-risk decisions.</strong> Runoff is a well-behaved model, not a validated one: treat what it shows as a way of thinking about where water goes, and check anything important against what actually happens on the ground and against official flood maps.</p>
+        <p>Privacy: there's no tracking. Your files and results stay in your browser. The only things sent anywhere are place searches (to postcodes.io), lidar requests (to the Environment Agency) and map tiles (to Ordnance Survey).</p>
+        <p>Runoff __RUNOFF_VERSION__, by Gophercs and Claude. Free software under the GNU GPL v3 or later.</p>
+        <p>Known limits: one soil and one land cover for the whole area. Soil is treated as deep, so shallow soils or a high water table filling up (common on UK hillsides in winter) aren't modelled; the "Saturated" start is the stand-in for that. Bridges and culverts are often missing or solid in a DTM, so roads can act as dams. Very shallow sheets of water on steep ground are this method's weakest case.</p>
+      </details>
+    </section>
+  </aside>
+</main>
+<script>
+/*SIM_CORE*/
+</script>
+<script>
+/*GPU*/
+</script>
+<script>
+/*POOL*/
+</script>
+<script>
+/*LOGO*/
+</script>
+<script>
+/*APP*/
+</script>
+</body>
+</html>

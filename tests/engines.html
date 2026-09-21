@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Runoff engine checks</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem}pre{background:#f3f5f0;padding:1rem;border-radius:6px;white-space:pre-wrap}</style>
+</head><body>
+<h1>Runoff engine checks</h1>
+<p>Runs the same storm on each engine this browser offers and compares them with the one-core reference engine.
+All cores should match it exactly. The graphics card works in 32-bit numbers, so it should agree to a small fraction of a percent.
+Takes a minute or so.</p>
+<button id="go">Run checks</button>
+<pre id="out"></pre>
+<script src="../src/sim_core.js"></script>
+<script src="../src/gpu.js"></script>
+<script src="../src/pool.js"></script>
+<script>
+const out = document.getElementById('out'), log = s => { out.textContent += s + '\n'; };
+function terrain() {
+  const w = 240, h = 180, z = new Float64Array(w * h); let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const cx = 60 + x * 0.4 + Math.sin(x / 30) * 15, dv = y - cx;
+    z[y * w + x] = 60 - x * 0.03 + Math.min(Math.abs(dv) * 0.09, 12) - Math.max(0, 1.2 - Math.abs(dv) * 0.35) + (Math.abs(x - 150) < 3 ? 6 : 0) + (rnd() - 0.5) * 0.06;
+  }
+  return { z, w, h };
+}
+function scenario() {
+  const { z, w, h } = terrain(), sink = new Uint8Array(w * h);
+  for (let x = 0; x < w; x++) { sink[x] = 1; sink[(h - 1) * w + x] = 1; } for (let y = 0; y < h; y++) { sink[y * w] = 1; sink[y * w + w - 1] = 1; }
+  const S = createSim(z, w, h, 2, sink); S.rain = 40 / 3.6e6;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {       // a patchwork of soils and roughness
+    const i = y * w + x, k = ((x >> 5) + (y >> 5)) % 3;
+    S.n2[i] = [0.035, 0.1, 0.02][k] ** 2; S.Ks[i] = [1.36, 0.9, 10.9][k] / 3.6e6; S.P[i] = [0.0193, 0.0974, 0][k];
+  }
+  const cy = y => Math.round(60 + y * 0.4 + Math.sin(y / 30) * 15);
+  S.sources.push({ i: cy(20) * w + 20, Q: 0.3 });
+  S.culverts.push({ a: cy(146) * w + 146, b: cy(154) * w + 154, D: 0.6, Q: 0 });
+  return S;
+}
+const vol = S => { let v = 0; for (const x of S.d) v += x; return v * S.dx * S.dx; };
+function compare(name, ref, S, exact) {
+  let mx = 0, differ = 0; for (let i = 0; i < ref.d.length; i++) { const d = Math.abs(ref.d[i] - S.d[i]); if (d > mx) mx = d; if (d) differ++; }
+  const dv = (vol(S) - vol(ref)) / vol(ref) * 100, di = (S.vol.infil - ref.vol.infil) / ref.vol.infil * 100;
+  const ok = exact ? differ === 0 : Math.abs(dv) < 0.05 && Math.abs(di) < 0.05;
+  log(`${ok ? 'PASS' : 'FAIL'}  ${name}: ${differ} cells differ (largest ${(mx * 1000).toFixed(3)} mm); stored water ${dv.toFixed(4)}%, soaked in ${di.toFixed(4)}%`);
+}
+document.getElementById('go').onclick = async () => {
+  out.textContent = ''; const T = 300;
+  const ref = scenario(); let t0 = performance.now(), n = 0; while (ref.t < T) { step(ref); n++; }
+  log(`one core: ${n} steps in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  const pool = await createPoolEngine();
+  if (pool) { const S = scenario(); t0 = performance.now(); let left = n; while (left > 0) { const k = Math.min(left, 97); await pool.run(S, k); left -= k; }
+    log(`all cores (${pool.threads} threads): ${((performance.now() - t0) / 1000).toFixed(1)} s`); compare('all cores', ref, S, true); }
+  else log('all cores: not available in this browser');
+  const gpu = await createGPUEngine();
+  if (gpu) { const S = scenario(); t0 = performance.now(); while (S.t < T) await gpu.run(S, Math.max(1, Math.min(300, Math.ceil((T - S.t) / Math.max(S.lastDt || 0.5, 0.05)))));
+    log(`graphics card (${gpu.label}): ${((performance.now() - t0) / 1000).toFixed(1)} s`); compare('graphics card', ref, S, false); }
+  else log('graphics card: WebGPU not available in this browser');
+  log('done');
+};
+</script></body></html>
