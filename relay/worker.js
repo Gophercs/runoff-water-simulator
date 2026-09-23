@@ -21,7 +21,8 @@ export default {
     const target = new URL(request.url).searchParams.get('url') || '';
     if (!ALLOWED.some(p => target.startsWith(p))) return new Response('Not allowed', { status: 403, headers: CORS });
     const range = request.headers.get('Range');
-    const upstream = await fetch(target, { method: request.method, headers: range ? { Range: range } : {}, cf: { cacheEverything: true, cacheTtl: 86400 } });
+    // ranged reads of huge files go straight through (caching them makes Cloudflare fetch far more than asked)
+    const upstream = range ? await fetch(target, { method: request.method, headers: { Range: range } }) : await fetch(target, { method: request.method, cf: { cacheEverything: true, cacheTtl: 86400 } });
     const headers = new Headers(CORS);
     for (const h of ['Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'ETag', 'Last-Modified']) {
       const v = upstream.headers.get(h); if (v) headers.set(h, v);

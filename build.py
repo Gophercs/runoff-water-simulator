@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).parent
 def read(p): return (ROOT / p).read_text(encoding='utf-8')
 def b64(p): return base64.b64encode((ROOT / p).read_bytes()).decode()
 
-VERSION = '1.2.2'
+VERSION = '1.2.3'
 
 HEADER = f"""<!--
   Runoff {VERSION}: lidar terrain water simulator, by Gophercs and Claude.
@@ -39,7 +39,7 @@ assert all(c.isalnum() or c in '-_' for c in OS_KEY), 'that OS key has unexpecte
 
 html = read('src/shell.html')
 parts = {
-    '/*VENDOR_GEOTIFF*/': read('vendor/geotiff.js'),
+    '/*VENDOR_GEOTIFF*/': read('vendor/geotiff.js').replace('//# sourceMappingURL=geotiff.js.map', ''),   # no map shipped, so no console noise
     '/*VENDOR_THREE*/': read('vendor/three.min.js'),
     '/*FONTFACE*/': FONTFACE,
     '/*FAVICON*/': FAVICON,

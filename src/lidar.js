@@ -195,31 +195,48 @@ function geoserverProvider(key, name, base, attrib, wanted, rank) {
 const RELAY = '__RUNOFF_RELAY__';
 function cogProvider(key, name, url, attrib) {
   const P = { key, name, attrib, tiff: null };
+  // open lazily: the file's index is big, so only parse the layers actually needed
   P.open = async () => {
     if (!RELAY) throw new Error(`${name} lidar needs the Runoff relay, which this copy doesn’t have set up yet. It’s coming soon.`);
     if (P.tiff) return P.tiff;
-    try { P.tiff = await GeoTIFF.fromUrl(viaRelay(url), { allowFullFile: false }); }
+    try { P.tiff = await GeoTIFF.fromUrl(viaRelay(url), { allowFullFile: false, blockSize: 524288 }); }
     catch (e) { throw new Error(`Couldn’t reach the ${name} lidar through the relay.`); }
-    const n = await P.tiff.getImageCount(), base = await P.tiff.getImage(0);
-    const [ox, oy] = base.getOrigin(), r0 = Math.abs(base.getResolution()[0]);
-    P.levels = [];
-    for (let i = 0; i < n; i++) { const im = await P.tiff.getImage(i); P.levels.push({ im, res: r0 * base.getWidth() / im.getWidth() }); }
-    P.ox = ox; P.oy = oy;
+    const base = await P.tiff.getImage(0), [ox, oy] = base.getOrigin();
+    P.levels = [{ im: base, res: Math.abs(base.getResolution()[0]) }];
+    P.baseW = base.getWidth(); P.ox = ox; P.oy = oy;
     return P.tiff;
+  };
+  // walk the overviews (finest to coarsest) only as far as the requested cell size needs
+  P.level = async cell => {
+    let best = P.levels[0];
+    for (let i = 1; ; i++) {
+      if (!P.levels[i]) {
+        let im; try { im = await P.tiff.getImage(i); } catch (e) { break; }
+        P.levels[i] = { im, res: P.levels[0].res * P.baseW / im.getWidth() };
+      }
+      if (P.levels[i].res > cell * 1.01) break;
+      best = P.levels[i];
+    }
+    return best;
   };
   P.candidates = async () => { await P.open(); return [{ id: 'wales-dtm-1m', rank: 0 }]; };
   P.nativeRes = async () => { await P.open(); return P.levels[0].res; };
   // read a box at roughly the requested cell size, as an in-memory GeoTIFF-like result
   P.read = async (e0, n0, e1, n1, cell) => {
+    // pieces already read are kept in this browser, so reopening an area is instant
+    const key = `${url}#${Math.round(e0)},${Math.round(n0)},${Math.round(e1)},${Math.round(n1)}@${+cell.toFixed(2)}`;
+    const hit = await TileCache.get(key); if (hit) return hit;
     await P.open();
-    let L = P.levels[0]; for (const l of P.levels) if (l.res <= cell * 1.01) L = l;
+    const L = await P.level(cell);
     const x0 = Math.max(0, Math.floor((e0 - P.ox) / L.res)), x1 = Math.min(L.im.getWidth(), Math.ceil((e1 - P.ox) / L.res));
     const y0 = Math.max(0, Math.floor((P.oy - n1) / L.res)), y1 = Math.min(L.im.getHeight(), Math.ceil((P.oy - n0) / L.res));
     if (x1 <= x0 || y1 <= y0) throw new Error('outside Wales');
     const ras = await L.im.readRasters({ window: [x0, y0, x1, y1], samples: [0], interleave: true });
     const z = ras instanceof Float32Array ? ras : Float32Array.from(ras);
-    return { w: x1 - x0, h: y1 - y0, z, cell: L.res, nodata: L.im.getGDALNoData ? L.im.getGDALNoData() : null,
+    const out = { w: x1 - x0, h: y1 - y0, z, cell: L.res, nodata: L.im.getGDALNoData ? L.im.getGDALNoData() : null,
       ox: P.ox + x0 * L.res, oy: P.oy - y0 * L.res, geo: true, spp: 1, bits: 32 };
+    TileCache.put(key, out);
+    return out;
   };
   return P;
 }
