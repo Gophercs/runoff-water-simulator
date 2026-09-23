@@ -2,3 +2,4 @@
 __pycache__/
 os_key.txt
 dist/
+relay.txt

@@ -35,7 +35,8 @@ function updateAttrib() {
   const lines = [];
   const d = dem, eaOn = d && (d.remote || d.ea || d.parent);
   const osOn = (+$('#mapMix').value || 0) > 0 && ((mode === 'select' && d && d.mapCv) || (mode === 'sim' && region && region.mapPix));
-  if (eaOn) lines.push('Lidar © Environment Agency, OGL');
+  if (eaOn) { const k = (d.remote && d.remote.provider) || (d.ea && d.ea.provider) || (d.parent && d.parent.remote && d.parent.remote.provider) || 'england';
+    lines.push(PROVIDERS[k] ? PROVIDERS[k].attrib : 'Lidar © Environment Agency, OGL'); }
   if (osOn) lines.push('Contains OS data © Crown copyright and database rights ' + new Date().getFullYear());
   el.textContent = lines.join(' · '); el.hidden = !lines.length;
 }
@@ -275,6 +276,7 @@ $('#go').addEventListener('click', () => {
   for (const id of ['p-load', 'p-tools']) { const sec = $('#' + id); if (!sec.classList.contains('fold')) sec.querySelector('h2').click(); }
   if (viewMode === '3d') setView('3d');
   benchEngines();
+  if (window.THREE) setView('3d');   // the most fun way in; the Map button is right there for the plan view
 });
 
 function stopSim() { running = false; setRunLabel(); }
@@ -743,6 +745,8 @@ function setView(v) {
   if (v === '3d' && !window.THREE) { $('#hint3d').hidden = false; $('#hint3d').textContent = 'The 3D library didn’t load. Check your connection and reload.'; return; }
   viewMode = v;
   $('#v2d').setAttribute('aria-pressed', v === '2d'); $('#v3d').setAttribute('aria-pressed', v === '3d');
+  $('#fs2d').setAttribute('aria-pressed', v === '2d'); $('#fs3d').setAttribute('aria-pressed', v === '3d');
+  $('#orbitBtn').hidden = !(v === '3d' && mode === 'sim');
   const three = v === '3d' && mode === 'sim';
   glCanvas.hidden = !three; view.hidden = three || mode === 'empty';
   $('#exagWrap').hidden = !three; $('#hint3d').hidden = !three;
@@ -845,7 +849,7 @@ function build3D() {
     brown: new T.MeshLambertMaterial({ color: 0x7a5230 }), line: new T.LineBasicMaterial({ color: 0x7a5230 }),
     dash: new T.LineDashedMaterial({ color: 0x3b2410, dashSize: mr, gapSize: mr * 0.6 }), r: mr };
   scene3 = { renderer, scene, camera, group, terrain, tGeo, wGeo, wMat, wPos, wDep, markers, mk, span, lastMk: 0, cUni,
-    zref: region.zmin, cam: { target: new T.Vector3(0, 0, 0), r: span * 1.1, theta: 0.35, phi: 0.95 } };
+    zref: region.zmin, cam: { target: new T.Vector3(0, 0, 0), r: span * 1.25, theta: 0.65, phi: 1.02 } };
   updateTerrain3D();
   const bg = cssVar('--well', '#D3DBD0'); renderer.setClearColor(new T.Color(bg));
   updateCamera();
@@ -935,8 +939,8 @@ function updateCamera() {
 }
 function fitGL() {
   if (!scene3) return;
-  const W = well.clientWidth - 2, H = isFull() ? Math.round(wellMaxH()) : Math.round(Math.min(Math.max(320, W * 0.66), window.innerHeight * 0.78));
-  if (Math.abs(well.clientHeight - H) > 1) well.style.height = H + 'px';
+  const W = well.clientWidth - 2, H = isFull() ? well.clientHeight - 2 : Math.round(Math.min(Math.max(320, W * 0.66), window.innerHeight * 0.78));
+  if (!isFull() && Math.abs(well.clientHeight - H) > 1) well.style.height = H + 'px';
   scene3.renderer.setSize(W, H);
   scene3.camera.aspect = W / H; updateCamera();
 }
@@ -1230,9 +1234,17 @@ $('#scImport').addEventListener('change', async e => {
   e.target.value = '';
 });
 
+/* ---------- slow orbit: about 13 minutes a lap, on purpose ---------- */
+const ORBIT_RATE = 0.008;   // radians per second
+let orbiting = false;
+$('#orbitBtn').addEventListener('click', () => {
+  orbiting = !orbiting; $('#orbitBtn').setAttribute('aria-pressed', String(orbiting));
+  $('#orbitBtn').textContent = orbiting ? 'Stop orbit' : 'Orbit';
+});
+
 /* ---------- full screen and fit ---------- */
 $('#fit').addEventListener('click', () => {
-  if (viewMode === '3d' && scene3) { const c = scene3.cam; c.target.set(0, 0, c.target.z); c.r = scene3.span * 1.1; c.theta = 0.35; c.phi = 0.95; updateCamera(); }
+  if (viewMode === '3d' && scene3) { const c = scene3.cam; c.target.set(0, 0, c.target.z); c.r = scene3.span * 1.25; c.theta = 0.65; c.phi = 1.02; updateCamera(); }
   else fitCanvas(true);
 });
 async function toggleFull() {
@@ -1244,12 +1256,17 @@ async function toggleFull() {
     try { if ($('#stage').requestFullscreen) { await $('#stage').requestFullscreen(); ok = true; } } catch (e) { ok = false; }
     if (!ok) document.body.classList.add('maxi');   // viewers that block real full screen get a page-filling view instead
   }
+  well.style.height = '';
   $('#fs').textContent = isFull() ? 'Exit full screen' : 'Full screen';
   setTimeout(() => fitCanvas(true), 60);
 }
 $('#fs').addEventListener('click', toggleFull);
 $('#fsExit').addEventListener('click', toggleFull);
 $('#fsRun').addEventListener('click', () => $('#run').click());
+$('#fs2d').addEventListener('click', () => $('#v2d').click());
+$('#fs3d').addEventListener('click', () => $('#v3d').click());
+$('#fsMap').addEventListener('input', () => { $('#mapMix').value = $('#fsMap').value; $('#mapMix').dispatchEvent(new Event('input')); });
+$('#mapMix').addEventListener('input', () => { $('#fsMap').value = $('#mapMix').value; });
 document.addEventListener('fullscreenchange', () => { $('#fs').textContent = isFull() ? 'Exit full screen' : 'Full screen'; setTimeout(() => fitCanvas(true), 60); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('maxi')) toggleFull(); });
 
@@ -1265,7 +1282,7 @@ function updateStats(force) {
   if (!force && now - lastStats < 250) return;
   lastStats = now;
   $('#clock').textContent = fmtTime(S.t);
-  $('#rate').textContent = $('#fsRate').textContent = running ? rateShown || 'Running' : 'Paused';
+  $('#rate').textContent = running ? rateShown || 'Running' : 'Paused';
   $('#fsClock').textContent = $('#clock').textContent;
   const V = S.vol, st = stored(S);
   const inn = V.rain + V.added + V.source, out = V.drained + V.infil, err = inn - st - out;
@@ -1334,6 +1351,7 @@ function frame(now) {
         rateMark = { t: now, s: S.t };
       }
     }
+    if (orbiting && viewMode === '3d' && scene3) { scene3.cam.theta += ORBIT_RATE * realDt; updateCamera(); }
     if (draw || markersDirty) {
       lastDraw = now;
       if (viewMode === '3d' && scene3 && !glCanvas.hidden) {

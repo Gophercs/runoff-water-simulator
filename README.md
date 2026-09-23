@@ -18,9 +18,9 @@ Runoff reads ASCII grids (`.asc`) and GeoTIFFs (`.tif`) with heights in metres. 
 
 Use a **DTM** (bare ground). A DSM includes trees and buildings as solid lumps.
 
-**Or skip the download.** Type a postcode, place name or grid reference into "Find an area" and Runoff pulls the lidar straight from the Environment Agency's Web Coverage Service: first an overview of the surrounding area (2 to 8 km across, 4 km by default), then just the box you choose at 1 m (2 m for larger boxes, up to 4 km across). England only, and it needs a browser that can reach the service, so it works in the hosted and offline copies but not inside a claude.ai artifact.
+**Or skip the download.** Type a postcode, place name or grid reference into "Find an area" and Runoff pulls the lidar straight from the national sources: the Environment Agency's coverage service for England, and the Welsh Government's Wales-wide lidar file for Wales (via a small relay, see below). Scotland is on the way. First an overview of the surrounding area (2 to 8 km across, 4 km by default), then just the box you choose at 1 m (2 m for larger boxes, up to 4 km across). It picks the service from the country of your search result and, where surveys overlap (common in Scotland, where lidar comes in patches), uses the newest one with data at that spot. Surveys finer than 1 m are asked for at 1 m. It needs a browser that can reach the services, so it works in the hosted and offline copies but not inside a claude.ai artifact.
 
-Data fetched this way is © Environment Agency copyright and/or database right, under the Open Government Licence. Place search uses [postcodes.io](https://postcodes.io).
+Data fetched this way is © Environment Agency, © Welsh Government or © Scottish Government, under the Open Government Licence; the app credits whichever is on screen. Place search uses [postcodes.io](https://postcodes.io).
 
 **Where things are kept.** Everything stays in the user's own browser; the host (Cloudflare or anywhere else) only serves the app file. Saved scenarios hold settings and recipes, not terrain. Scenarios built on Environment Agency lidar remember their box and fetch it again when loaded, and downloaded lidar is cached in the browser (IndexedDB, the most recent 40 downloads), so reopening a scenario usually costs no API call at all. Scenarios built on your own files need that file opened first.
 
@@ -36,7 +36,7 @@ Data fetched this way is © Environment Agency copyright and/or database right, 
 | **Soil** | Eleven soil textures and seven land covers, set once for the whole area or painted in zones |
 | **Look** | 2D map or 3D view, zoom and pan, full screen, contours, six shading styles (including greyscale, rainbow height and soil type), depth now or deepest so far, pond volumes, a running water balance |
 | **Keep** | Save and load setups, export and import them as files |
-| **Find** | Search for a place and download Environment Agency lidar for it, no manual download needed |
+| **Find** | Search anywhere in Great Britain and download lidar for it, no manual download needed |
 | **Backdrop** | Optional Ordnance Survey map under the terrain, in 2D and 3D |
 
 Everything you add appears in a list under the tools, where you can change its main setting or delete it.
@@ -79,7 +79,7 @@ Runoff is a well-behaved model, not a validated one. Use it to think about where
 
 ## Privacy
 
-There's no tracking and no account. Terrain files, saved setups and results stay in your browser. The only things sent anywhere are place searches (to postcodes.io), lidar requests (to the Environment Agency) and map tiles (to Ordnance Survey).
+There are no cookies, no tracking and no account. A hosted copy may count visits with Cloudflare Web Analytics, which is cookie-free and collects no personal data. Terrain files, saved setups and results stay in your browser. The only things sent anywhere are place searches (to postcodes.io), lidar requests (to the Environment Agency, Welsh Government or Scottish Government) and map tiles (to Ordnance Survey).
 
 ## Known limits
 
@@ -96,6 +96,14 @@ It's one static file, so any static host works. Two free options:
 
 - **Cloudflare Pages** or **Netlify:** connect this repository, set the build command to `python3 build.py` and the output directory to `dist`.
 - **GitHub Pages:** in the repository settings, publish from the branch and folder containing `index.html` (you may want to copy `dist/index.html` to a `docs/` folder and publish that).
+
+### The Welsh lidar relay (optional)
+
+Wales publishes its lidar as one Wales-wide Cloud Optimized GeoTIFF, which Runoff reads in small pieces (just your area, and the file's built-in overviews for the wide preview). The storage it sits on allows those partial reads but doesn't send the header browsers need to use them from another site, so Runoff reads it through a tiny relay: `relay/worker.js`, a Cloudflare Worker that passes range requests through and adds the header. It relays only the national lidar services (Environment Agency, DataMapWales, Scottish Remote Sensing Portal), so it can't be used as a general proxy. When a relay is set, all lidar requests go through it, which also means Cloudflare's Worker metrics show you how those services are behaving: request counts, errors and status codes.
+
+To set it up: in Cloudflare, go to Workers & Pages, then Create, then Worker, paste in `relay/worker.js` and deploy. Then set the `RUNOFF_RELAY` environment variable on your Pages project to the Worker's address (for example `https://runoff-relay.yourname.workers.dev/`) and redeploy. Without it, Welsh searches say Wales is coming soon. The free Workers plan allows 100,000 requests a day; loading an area takes a few dozen.
+
+Scottish lidar is published as tiles on Amazon's open data registry rather than as a service, so it isn't wired in yet.
 
 ### A shared map key for your visitors (optional)
 

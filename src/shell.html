@@ -151,11 +151,23 @@ button.small{padding:.2rem .6rem;font-size:.88rem}
 #view{position:absolute}
 .well{touch-action:none}
 .fsbar{display:none}
-.maxi .stage,.stage:fullscreen{position:fixed;inset:0;z-index:50;background:var(--paper);padding:max(.6rem,env(safe-area-inset-top,0px)) .8rem .6rem;display:flex;flex-direction:column}
-.stage:fullscreen .well,.maxi .stage .well{flex:1}
-.stage:fullscreen .fsbar,.maxi .stage .fsbar{display:flex;gap:.8rem;align-items:center;margin-top:.5rem}
-.fsbar .clock{font-size:1.2rem}
-.stage:fullscreen .probe,.maxi .stage .probe{margin-top:.3rem}
+.orbit{position:absolute;left:.5rem;bottom:.5rem;background:color-mix(in srgb,var(--panel) 85%,transparent)}
+.orbit[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.maxi .stage,.stage:fullscreen{position:fixed;inset:0;z-index:50;background:var(--paper);padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);display:flex;flex-direction:column}
+.stage:fullscreen .viewbar,.maxi .stage .viewbar,.stage:fullscreen .probe,.maxi .stage .probe{display:none!important}
+.stage:fullscreen .well,.maxi .stage .well{flex:1;min-height:0;height:auto!important;border-radius:0;border-left:0;border-right:0;border-top:0}
+.stage:fullscreen .fsbar,.maxi .stage .fsbar{display:flex;gap:.6rem;align-items:center;padding:.35rem .6rem;flex-wrap:nowrap;overflow-x:auto}
+.fsbar .clock{font-size:1.05rem}
+.fsbar .logo.mini{height:1.35rem}
+.fsbar .seg button{padding:.2rem .6rem}
+.fsbar .fsmap{display:flex;align-items:center;gap:.3rem;color:var(--muted);font-size:.85rem}
+.fsbar .fsmap input{width:5rem;accent-color:var(--water)}
+.fsbar .fsexit{margin-left:auto}
+.fsbar > *{flex-shrink:0}
+@media (max-width:560px){
+  .stage:fullscreen .fsbar,.maxi .stage .fsbar{flex-wrap:wrap;row-gap:.35rem;column-gap:.5rem;overflow:visible}
+  .fsbar .fsmap input{width:4.2rem}
+}
 .features{margin:.5rem 0 0;font-size:.9rem;font-variant-numeric:tabular-nums}
 </style>
 </head>
@@ -188,10 +200,15 @@ button.small{padding:.2rem .6rem;font-size:.88rem}
       <canvas id="gl" aria-label="3D terrain view" hidden></canvas>
       <div class="labels" id="labels"></div>
       <div class="attrib" id="attrib" hidden></div>
+      <button id="orbitBtn" class="small orbit" aria-pressed="false" hidden>Orbit</button>
       <div id="empty"><p>Open a DTM tile, find an area, or try the demo valley to start.</p></div>
     </div>
     <div class="probe" id="probe"></div>
-    <div class="fsbar" id="fsbar"><span class="logo mini" id="logoFs"></span><button class="primary" id="fsRun">Run</button><span class="clock" id="fsClock">0:00:00</span><span class="rate" id="fsRate"></span><button id="fsExit">Exit full screen</button></div>
+    <div class="fsbar" id="fsbar"><span class="logo mini" id="logoFs"></span>
+      <div class="seg" role="group" aria-label="View"><button id="fs2d" aria-pressed="false">Map</button><button id="fs3d" aria-pressed="true">3D</button></div>
+      <label class="fsmap">Map <input type="range" id="fsMap" min="0" max="100" step="5" value="0"></label>
+      <button class="primary" id="fsRun">Run</button><span class="clock" id="fsClock">0:00:00</span>
+      <button id="fsExit" class="fsexit">Exit</button></div>
   </div>
 
   <aside class="panel">
@@ -211,14 +228,14 @@ button.small{padding:.2rem .6rem;font-size:.88rem}
       <label class="field">Map style <select id="osStyle"><option value="Outdoor_27700" selected>Outdoor</option><option value="Light_27700">Light</option><option value="Road_27700">Road</option><option value="Leisure_27700">Leisure (Premium)</option></select></label>
       <label class="field">My key includes Premium <input type="checkbox" id="osPremium"></label>
       <p class="note">A free key (OS Maps API, OpenData plan) from osdatahub.os.uk. Save it before searching and the OS map shows on the overview too; fade it with the Map slider above the view. Contains OS data © Crown copyright and database rights.</p>
-      <h3 class="sub">Or find an area (England)</h3>
+      <h3 class="sub">Or find an area (Great Britain)</h3>
       <label class="field">Area to preview <select id="eaSize"><option value="2000">2 km across</option><option value="4000" selected>4 km across</option><option value="6000">6 km across</option><option value="8000">8 km across</option></select></label>
       <div class="row">
         <input type="text" id="eaQ" placeholder="Postcode, place or grid ref" style="flex:1;min-width:7rem;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:.3rem .45rem">
         <button id="eaGo">Find</button>
       </div>
       <div class="featlist" id="eaResults"></div>
-      <p class="note">Lidar straight from the Environment Agency. Pick a place, then drag a box on the overview and the detail downloads when you press Simulate.</p>
+      <p class="note">Lidar straight from the Environment Agency, Welsh Government or Scottish Government services. Pick a place, then drag a box on the overview and the detail downloads when you press Simulate.</p>
       <p class="note" id="fileinfo" aria-live="polite"></p>
     </section>
 
@@ -411,7 +428,7 @@ button.small{padding:.2rem .6rem;font-size:.88rem}
         <p>Checks it passes: a pool settles dead flat, water is conserved to rounding error, and rain on a uniform slope reaches the textbook Manning depth to within about 1.5%.</p>
         <p>Soaking-in uses the Green-Ampt method with the Rawls, Brakensiek &amp; Miller (1983) soil parameters: dry soil takes water fast at first, slowing towards a steady rate as it wets. Land cover scales that rate and sets the roughness; those multipliers are rough guides, and woodland in particular varies a lot in the field.</p>
         <p><strong>Not for flood-risk decisions.</strong> Runoff is a well-behaved model, not a validated one: treat what it shows as a way of thinking about where water goes, and check anything important against what actually happens on the ground and against official flood maps.</p>
-        <p>Privacy: there's no tracking. Your files and results stay in your browser. The only things sent anywhere are place searches (to postcodes.io), lidar requests (to the Environment Agency) and map tiles (to Ordnance Survey).</p>
+        <p>Privacy: no cookies and no tracking. The hosted site may count visits with Cloudflare's Web Analytics, which is cookie-free and collects no personal data. Your files and results stay in your browser. The only things sent anywhere are place searches (to postcodes.io), lidar requests (to the Environment Agency, Welsh Government or Scottish Government) and map tiles (to Ordnance Survey).</p>
         <p>Runoff __RUNOFF_VERSION__, by Gophercs and Claude. Free software under the GNU GPL v3 or later.</p>
         <p>Known limits: one soil and one land cover for the whole area. Soil is treated as deep, so shallow soils or a high water table filling up (common on UK hillsides in winter) aren't modelled; the "Saturated" start is the stand-in for that. Bridges and culverts are often missing or solid in a DTM, so roads can act as dams. Very shallow sheets of water on steep ground are this method's weakest case.</p>
       </details>

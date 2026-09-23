@@ -68,7 +68,7 @@ async function parseTIFF(buf) {
   catch (e) { geo = false; }
   const ras = await im.readRasters({ samples: [0], interleave: true });
   const z = ras instanceof Float32Array ? ras : Float32Array.from(ras);
-  return { w, h, z, cell, nodata: im.getGDALNoData(), ox, oy, geo };
+  return { w, h, z, cell, nodata: im.getGDALNoData(), ox, oy, geo, spp: im.getSamplesPerPixel(), bits: (b => typeof b === 'number' ? b : 32)(im.getBitsPerSample(0)) };
 }
 
 function finishDEM(d, name) {
@@ -215,7 +215,7 @@ function buildOverview() {
 const Z2 = { k: 1, left: 0, top: 0, base: 1 };
 const isFull = () => !!document.fullscreenElement || document.body.classList.contains('maxi');
 function wellMaxH() {
-  if (isFull()) return Math.max(200, window.innerHeight - well.getBoundingClientRect().top - (document.getElementById('fsbar').offsetHeight || 40) - 40);
+  if (isFull()) return Math.max(150, well.clientHeight - 2);   // full screen: the well is sized by the layout
   return Math.max(320, window.innerHeight * 0.78);
 }
 function fitCanvas(reset) {
@@ -224,7 +224,7 @@ function fitCanvas(reset) {
   const maxW = well.clientWidth - 2, maxH = wellMaxH();
   Z2.base = Math.min(maxW / view.width, maxH / view.height);
   const hgt = isFull() ? maxH : Math.floor(view.height * Z2.base);
-  if (Math.abs(well.clientHeight - hgt) > 1) well.style.height = hgt + 'px';
+  if (!isFull() && Math.abs(well.clientHeight - hgt) > 1) well.style.height = hgt + 'px';
   if (reset === true || Z2.k === 1) { Z2.k = 1; Z2.left = (well.clientWidth - view.width * Z2.base) / 2; Z2.top = (well.clientHeight - view.height * Z2.base) / 2; }
   applyZoom();
 }

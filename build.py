@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).parent
 def read(p): return (ROOT / p).read_text(encoding='utf-8')
 def b64(p): return base64.b64encode((ROOT / p).read_bytes()).decode()
 
-VERSION = '1.0.0'
+VERSION = '1.2.1'
 
 HEADER = f"""<!--
   Runoff {VERSION}: lidar terrain water simulator, by Gophercs and Claude.
@@ -53,9 +53,14 @@ for key, val in parts.items():
     assert html.count(key) == 1, f'{key} should appear exactly once in src/shell.html'
     html = html.replace(key, val)
 html = html.replace('<!doctype html>', '<!doctype html>\n' + HEADER, 1)
+# Optional relay address (a Cloudflare Worker, see relay/) for Welsh lidar: RUNOFF_RELAY env var or relay.txt
+RELAY = os.environ.get('RUNOFF_RELAY', '').strip()
+if not RELAY and (ROOT / 'relay.txt').exists(): RELAY = (ROOT / 'relay.txt').read_text().strip()
+assert RELAY == '' or RELAY.startswith('https://'), 'the relay address should start with https://'
+html = html.replace('__RUNOFF_RELAY__', RELAY)
 html = html.replace('__RUNOFF_OS_KEY__', OS_KEY).replace('__RUNOFF_VERSION__', VERSION)
 
 out = ROOT / 'dist' / 'index.html'
 out.parent.mkdir(exist_ok=True)
 out.write_text(html, encoding='utf-8')
-print(f'wrote {out} ({len(html.encode()) / 1e6:.2f} MB), version {VERSION}, shared OS key {"included" if OS_KEY else "not set"}')
+print(f'wrote {out} ({len(html.encode()) / 1e6:.2f} MB), version {VERSION}, shared OS key {"included" if OS_KEY else "not set"}, relay {RELAY or "not set"}')
