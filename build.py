@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).parent
 def read(p): return (ROOT / p).read_text(encoding='utf-8')
 def b64(p): return base64.b64encode((ROOT / p).read_bytes()).decode()
 
-VERSION = '1.2.1'
+VERSION = '1.2.2'
 
 HEADER = f"""<!--
   Runoff {VERSION}: lidar terrain water simulator, by Gophercs and Claude.
@@ -54,9 +54,10 @@ for key, val in parts.items():
     html = html.replace(key, val)
 html = html.replace('<!doctype html>', '<!doctype html>\n' + HEADER, 1)
 # Optional relay address (a Cloudflare Worker, see relay/) for Welsh lidar: RUNOFF_RELAY env var or relay.txt
-RELAY = os.environ.get('RUNOFF_RELAY', '').strip()
-if not RELAY and (ROOT / 'relay.txt').exists(): RELAY = (ROOT / 'relay.txt').read_text().strip()
-assert RELAY == '' or RELAY.startswith('https://'), 'the relay address should start with https://'
+# '/relay' is the Pages Function in functions/relay.js, which deploys with the site
+RELAY = os.environ.get('RUNOFF_RELAY', '/relay').strip()
+if (ROOT / 'relay.txt').exists(): RELAY = (ROOT / 'relay.txt').read_text().strip()
+assert RELAY == '' or RELAY.startswith('https://') or RELAY.startswith('/'), 'the relay should be /relay or an https:// address'
 html = html.replace('__RUNOFF_RELAY__', RELAY)
 html = html.replace('__RUNOFF_OS_KEY__', OS_KEY).replace('__RUNOFF_VERSION__', VERSION)
 

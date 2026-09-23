@@ -11,12 +11,19 @@ const EA = {
 const eaUrlBase = res => `https://environment.data.gov.uk/spatialdata/${EA.ds[res]}/wcs`;
 // route lidar through the relay when one is set: it adds the cross-site header their servers omit,
 // and gives the site owner a view of how the lidar services are behaving
-const viaRelay = u => (typeof RELAY === 'string' && RELAY && !u.startsWith(RELAY)) ? `${RELAY}?url=${encodeURIComponent(u)}` : u;
+const viaRelay = u => (RELAY && !u.startsWith(RELAY) && !u.startsWith('/')) ? `${RELAY}?url=${encodeURIComponent(u)}` : u;
+// direct first (fast, no relay traffic); through the relay if the browser blocks reading the reply
+async function fetchLidarUrl(url, init) {
+  if (!RELAY || EA.relayOnly) return fetch(RELAY && EA.relayOnly ? viaRelay(url) : url, init);
+  try { const r = await fetch(url, init); if (r.ok || r.status === 206) return r; EA.relayOnly = true; }
+  catch (e) { EA.relayOnly = true; }
+  return fetch(viaRelay(url), init);
+}
 async function getXml(url, who) {
   let last;
   for (let tryN = 0; tryN < 2; tryN++) {
     try {
-      const r = await fetch(viaRelay(url));
+      const r = await fetchLidarUrl(url);
       if (!r.ok) { last = new Error(`the ${who} service answered ${r.status}`); continue; }
       return new DOMParser().parseFromString(await r.text(), 'text/xml');
     } catch (e) { last = new Error(`couldn’t reach the ${who} service`); }
@@ -82,7 +89,7 @@ async function eaFetchTiff(url, onProgress) {
 
 async function eaFetchTiffNet(url, onProgress) {
   let r;
-  try { r = await fetch(viaRelay(url)); }
+  try { r = await fetchLidarUrl(url); }
   catch (e) { throw new Error('Couldn’t reach the lidar service. It may be down for a moment, or this copy of Runoff may not be allowed to fetch from other sites.'); }
   const type = r.headers.get('content-type') || '';
   if (!r.ok || !/tiff/i.test(type)) {
